@@ -1,0 +1,21 @@
+{
+  "name": "mcp-game-demo",
+  "version": "1.0.0",
+  "description": "npm install express ws body-parser cors",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.8.4",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "fetch": "^1.1.0",
+    "natural": "^8.0.1",
+    "ws": "^8.18.1"
+  }
+}
