@@ -22,15 +22,17 @@ const clients = new Set();
 const clientPositions = new Map();
 
 // 敵の位置情報を保持する配列
+// 敵の位置情報を保持する配列 - IDを追加
 const enemyPositions = [
-  { x: 10, z: 10 },
-  { x: -5, z: 15 },
-  { x: 8, z: -12 },
-  { x: 1, z: -10 },
-  { x: -10, z: 4 },
-  { x: -3, z: -5 },
-  { x: 3, z: 6 }
+  { id: 1, x: 10, z: 10 },
+  { id: 2, x: -5, z: 15 },
+  { id: 3, x: 8, z: -12 },
+  { id: 4, x: 1, z: -10 },
+  { id: 5, x: -10, z: 4 },
+  { id: 6, x: -3, z: -5 },
+  { id: 7, x: 3, z: 6 }
 ];
+
 
 // WebSocket接続のハンドリング
 wss.on('connection', (ws) => {
@@ -266,30 +268,32 @@ app.post('/api/enemies', (req, res) => {
   });
 });
 
-// 敵を削除するAPI
-app.delete('/api/enemies/:index', (req, res) => {
-  const index = parseInt(req.params.index);
+
+// 敵を削除するAPI - インデックスではなくIDを使用
+app.delete('/api/enemies/:id', (req, res) => {
+  const id = parseInt(req.params.id);
   
-  if (isNaN(index) || index < 0 || index >= enemyPositions.length) {
-    return res.status(400).json({ error: 'Invalid enemy index' });
+  const index = enemyPositions.findIndex(enemy => enemy.id === id);
+  if (index === -1) {
+    return res.status(400).json({ error: 'Invalid enemy ID' });
   }
   
-  // 指定されたインデックスの敵を削除
-  enemyPositions.splice(index, 1);
+  // 指定されたIDの敵を削除
+  const removedEnemy = enemyPositions.splice(index, 1)[0];
   
-  // すべてのクライアントに敵の削除を通知
+  // すべてのクライアントに敵の削除を通知 - IDを使用
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({
         type: 'enemy-removed',
-        index: index
+        id: id
       }));
     }
   });
   
   res.json({ 
     success: true, 
-    message: `Enemy at index ${index} removed`,
+    message: `Enemy with ID ${id} removed`,
     enemies: enemyPositions
   });
 });

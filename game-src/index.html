@@ -323,57 +323,68 @@
 
         // WebSocketサーバーとの接続
         let socket;
-        function connectWebSocket() {
-            socket = new WebSocket('ws://localhost:3000');
-            
-            socket.onopen = function() {
-                console.log('WebSocket接続が確立されました');
-                // クライアントIDを生成して保存
-                gameState.clientId = 'client_' + Math.random().toString(36).substr(2, 9);
-                // クライアントIDをサーバーに送信
-                socket.send(JSON.stringify({
-                    type: 'register',
-                    clientId: gameState.clientId
-                }));
-            };
-            
-            socket.onmessage = function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'move') {
-                        if (data.absolute) {
-                            movePlayer(data.x, data.z);
-                        } else {
-                            movePlayerRelative(data.x, data.z);
-                        }
-                    } else if (data.type === 'fire-missile') {
-                        createMissile(data.x, data.z, data.direction);
-                    } else if (data.type === 'enemies') {
-                        // 敵の位置情報を更新
-                        updateEnemiesFromServer(data.enemies);
-                    } else if (data.type === 'enemy-removed') {
-                        // サーバーから敵が削除された通知を受信
-                        const index = data.index;
-                        if (index >= 0 && index < gameState.enemies.length) {
-                            scene.remove(gameState.enemies[index]);
-                            gameState.enemies.splice(index, 1);
-                            updateEnemyCountDisplay();
-                        }
-                    }
-                } catch (e) {
-                    console.error('WebSocketメッセージの処理中にエラーが発生しました:', e);
+ // WebSocketサーバーとの接続
+function connectWebSocket() {
+    socket = new WebSocket('ws://localhost:3000');
+    
+    socket.onopen = function() {
+        console.log('WebSocket接続が確立されました');
+        // クライアントIDを生成して保存
+        gameState.clientId = 'client_' + Math.random().toString(36).substr(2, 9);
+        // クライアントIDをサーバーに送信
+        socket.send(JSON.stringify({
+            type: 'register',
+            clientId: gameState.clientId
+        }));
+    };
+    
+    socket.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'move') {
+                if (data.absolute) {
+                    movePlayer(data.x, data.z);
+                } else {
+                    movePlayerRelative(data.x, data.z);
                 }
-            };
-            
-            socket.onclose = function() {
-                console.log('WebSocket接続が閉じられました。再接続を試みます...');
-                setTimeout(connectWebSocket, 2000);
-            };
-            
-            socket.onerror = function(error) {
-                console.error('WebSocketエラー:', error);
-            };
+            } else if (data.type === 'fire-missile') {
+                createMissile(data.x, data.z, data.direction);
+            } else if (data.type === 'enemies') {
+                // 敵の位置情報を更新
+                updateEnemiesFromServer(data.enemies);
+            } else if (data.type === 'enemy-removed') {
+                // サーバーから敵が削除された通知を受信 - IDで検索
+                const id = data.id;
+                const index = gameState.enemies.findIndex(enemy => enemy.userData.id === id);
+                if (index >= 0) {
+                    // 爆発エフェクトを生成
+                    const enemy = gameState.enemies[index];
+                    const explosion = createExplosion(enemy.position.x, enemy.position.z);
+                    gameState.explosions.push(explosion);
+                    
+                    scene.remove(enemy);
+                    gameState.enemies.splice(index, 1);
+                    
+                    // スコアを更新
+                    gameState.score += 100;
+                    updateScoreDisplay();
+                    updateEnemyCountDisplay();
+                }
+            }
+        } catch (e) {
+            console.error('WebSocketメッセージの処理中にエラーが発生しました:', e);
         }
+    };
+    
+    socket.onclose = function() {
+        console.log('WebSocket接続が閉じられました。再接続を試みます...');
+        setTimeout(connectWebSocket, 2000);
+    };
+    
+    socket.onerror = function(error) {
+        console.error('WebSocketエラー:', error);
+    };
+}
 
         // サーバーから敵の位置情報を取得する関数
         function fetchEnemiesFromServer() {
@@ -387,22 +398,22 @@
                 .catch(error => console.error('敵の位置情報の取得に失敗しました:', error));
         }
 
-        // サーバーから取得した敵の位置情報で敵を更新する関数
-        function updateEnemiesFromServer(enemies) {
-            // 既存の敵をクリア
-            gameState.enemies.forEach(enemy => {
-                scene.remove(enemy);
-            });
-            gameState.enemies = [];
-            
-            // 新しい敵の位置情報で敵を作成
-            enemies.forEach(enemy => {
-                createEnemyByPos(enemy.x, enemy.z);
-            });
-            
-            // 敵の数表示を更新
-            updateEnemyCountDisplay();
-        }
+// サーバーから取得した敵の位置情報で敵を更新する関数
+function updateEnemiesFromServer(enemies) {
+    // 既存の敵をクリア
+    gameState.enemies.forEach(enemy => {
+        scene.remove(enemy);
+    });
+    gameState.enemies = [];
+    
+    // 新しい敵の位置情報で敵を作成
+    enemies.forEach(enemy => {
+        createEnemyByPos(enemy.x, enemy.z, enemy.id); // IDを渡す
+    });
+    
+    // 敵の数表示を更新
+    updateEnemyCountDisplay();
+}
 
         // 視界情報を取得する関数
         function fetchVisionInfo() {
@@ -536,48 +547,36 @@
             updateEnemyCountDisplay();
         }
 
-        function createEnemyByPos(x, z) {
-            // 敵の最大数をチェック
-            if (gameState.enemies.length >= gameState.maxEnemies) {
-                console.log(`敵の最大数 (${gameState.maxEnemies}) に達しました。これ以上敵は生成されません。`);
-                return;
-            }
-            
-            // 敵の車体を作成
-            const enemyGeometry = new THREE.BoxGeometry(1, 0.5, 1.5);
-            const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
-            const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
-            enemy.position.set(x, 0.25, z);
-            enemy.castShadow = true;
-            scene.add(enemy);
+ // 敵の作成関数を修正してIDを持たせる
+function createEnemyByPos(x, z, id) {
+    // 敵の最大数をチェック
+    if (gameState.enemies.length >= gameState.maxEnemies) {
+        console.log(`敵の最大数 (${gameState.maxEnemies}) に達しました。これ以上敵は生成されません。`);
+        return;
+    }
+    
+    // 敵の車体を作成
+    const enemyGeometry = new THREE.BoxGeometry(1, 0.5, 1.5);
+    const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+    const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+    enemy.position.set(x, 0.25, z);
+    enemy.castShadow = true;
+    scene.add(enemy);
 
-            // 敵の砲塔を作成
-            const enemyTurretGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
-            const enemyTurretMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
-            const enemyTurret = new THREE.Mesh(enemyTurretGeometry, enemyTurretMaterial);
-            enemyTurret.position.y = 0.6;
-            enemyTurret.castShadow = true;
-            enemy.add(enemyTurret);
+    // ... 敵の作成コード ...
 
-            // 敵の砲身を作成
-            const enemyBarrelGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.2, 8);
-            const enemyBarrelMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
-            const enemyBarrel = new THREE.Mesh(enemyBarrelGeometry, enemyBarrelMaterial);
-            enemyBarrel.position.z = 0.6;
-            enemyBarrel.rotation.x = Math.PI / 2;
-            enemyBarrel.castShadow = true;
-            enemyTurret.add(enemyBarrel);
+    // 敵の情報を保存 - IDを追加
+    enemy.userData = {
+        id: id, // IDを保存
+        turret: enemyTurret,
+        barrel: enemyBarrel
+    };
+    gameState.enemies.push(enemy);
+    
+    // 敵の数表示を更新
+    updateEnemyCountDisplay();
+}
 
-            // 敵の情報を保存
-            enemy.userData = {
-                turret: enemyTurret,
-                barrel: enemyBarrel
-            };
-            gameState.enemies.push(enemy);
-            
-            // 敵の数表示を更新
-            updateEnemyCountDisplay();
-        }
 
         // 敵の移動関数は削除または空にする（敵は動かないため）
         function updateEnemies() {
@@ -670,102 +669,170 @@
             }
         }
 
-        // ミサイルの移動と当たり判定
-        function updateMissiles() {
-            // ミサイルの移動を処理
-            for (let i = gameState.missiles.length - 1; i >= 0; i--) {
-                const missile = gameState.missiles[i];
-                const directionRad = missile.userData.direction * (Math.PI / 180);
-                missile.position.x += Math.sin(directionRad) * missile.userData.speed;
-                missile.position.z += Math.cos(directionRad) * missile.userData.speed;
+// ミサイルの移動と当たり判定
+function updateMissiles() {
+    // ミサイルの移動を処理
+    for (let i = gameState.missiles.length - 1; i >= 0; i--) {
+        const missile = gameState.missiles[i];
+        const directionRad = missile.userData.direction * (Math.PI / 180);
+        missile.position.x += Math.sin(directionRad) * missile.userData.speed;
+        missile.position.z += Math.cos(directionRad) * missile.userData.speed;
 
-                // 画面外に出たミサイルを削除
-                if (Math.abs(missile.position.x) > 50 || Math.abs(missile.position.z) > 50) {
-                    scene.remove(missile);
-                    gameState.missiles.splice(i, 1);
-                }
-            }
+        // 画面外に出たミサイルを削除
+        if (Math.abs(missile.position.x) > 50 || Math.abs(missile.position.z) > 50) {
+            scene.remove(missile);
+            gameState.missiles.splice(i, 1);
+        }
+    }
 
-            // 当たり判定を処理
-            const hitEnemies = new Set(); // 当たった敵のインデックスを記録
-            const hitMissiles = new Set(); // 当たったミサイルのインデックスを記録
+    // 各ミサイルについて最も近い敵を見つけて当たり判定
+    for (let i = gameState.missiles.length - 1; i >= 0; i--) {
+        const missile = gameState.missiles[i];
+        let closestEnemyIndex = -1;
+        let closestDistance = Infinity;
 
-            // まず全ての当たり判定をチェック
-            for (let i = 0; i < gameState.missiles.length; i++) {
-                if (hitMissiles.has(i)) continue; // すでに当たったミサイルはスキップ
-
-                const missile = gameState.missiles[i];
-                let closestEnemyIndex = -1;
-                let closestDistance = Infinity;
-
-                // 最も近い敵を探す
-                for (let j = 0; j < gameState.enemies.length; j++) {
-                    if (hitEnemies.has(j)) continue; // すでに当たった敵はスキップ
-
-                    const enemy = gameState.enemies[j];
-                    const distance = missile.position.distanceTo(enemy.position);
-                    if (distance < closestDistance) {
-                        closestDistance = distance;
-                        closestEnemyIndex = j;
-                    }
-                }
-
-                // 最も近い敵との当たり判定
-                if (closestEnemyIndex !== -1 && closestDistance < 1) {
-                    hitEnemies.add(closestEnemyIndex);
-                    hitMissiles.add(i);
-                    break; // 1つのミサイルは1つの敵にしか当たらない
-                }
-            }
-
-            // 当たったミサイルを処理（後ろから前へ）
-            const sortedHitMissiles = Array.from(hitMissiles).sort((a, b) => b - a);
-            for (const missileIndex of sortedHitMissiles) {
-                const missile = gameState.missiles[missileIndex];
-                scene.remove(missile);
-                gameState.missiles.splice(missileIndex, 1);
-            }
-
-            // 当たった敵をサーバーに通知（1つずつ順番に）
-            const sortedHitEnemies = Array.from(hitEnemies).sort((a, b) => b - a);
-            if (sortedHitEnemies.length > 0) {
-                removeEnemyFromServer(sortedHitEnemies[0]); // 一度に1つの敵のみを削除
+        // 最も近い敵を探す
+        for (let j = 0; j < gameState.enemies.length; j++) {
+            const enemy = gameState.enemies[j];
+            const distance = missile.position.distanceTo(enemy.position);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestEnemyIndex = j;
             }
         }
 
-        // サーバーから敵を削除する関数
-        function removeEnemyFromServer(index) {
-            if (index < 0 || index >= gameState.enemies.length) {
-                console.error('無効な敵のインデックス:', index);
-                return;
-            }
-
-            fetch(`/api/enemies/${index}`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log(`敵が削除されました: インデックス ${index}`);
-                    // サーバーからの通知を待ってから敵を削除
-                    const enemy = gameState.enemies[index];
-                    if (enemy) {
-                        // 爆発エフェクトを生成
-                        const explosion = createExplosion(enemy.position.x, enemy.position.z);
-                        gameState.explosions.push(explosion);
-                        
-                        scene.remove(enemy);
-                        gameState.enemies.splice(index, 1);
-                        gameState.score += 100;
-                        updateScoreDisplay();
-                        updateEnemyCountDisplay();
-                    }
-                } else {
-                    console.error('敵の削除に失敗しました:', data.error);
-                }
-            })
-            .catch(error => console.error('敵の削除中にエラーが発生しました:', error));
+        // 最も近い敵との当たり判定
+        if (closestEnemyIndex !== -1 && closestDistance < 1) {
+            // 敵を削除
+            removeEnemyFromServer(closestEnemyIndex);
+            
+            // ミサイルを削除
+            scene.remove(missile);
+            gameState.missiles.splice(i, 1);
         }
+    }
+}
+// 敵の作成
+function createEnemyByPos(x, z, id) {
+    // 敵の最大数をチェック
+    if (gameState.enemies.length >= gameState.maxEnemies) {
+        console.log(`敵の最大数 (${gameState.maxEnemies}) に達しました。これ以上敵は生成されません。`);
+        return;
+    }
+    
+    // 敵の車体を作成
+    const enemyGeometry = new THREE.BoxGeometry(1, 0.5, 1.5);
+    const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+    const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+    enemy.position.set(x, 0.25, z);
+    enemy.castShadow = true;
+    scene.add(enemy);
+
+    // 敵の砲塔を作成
+    const enemyTurretGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
+    const enemyTurretMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+    const enemyTurret = new THREE.Mesh(enemyTurretGeometry, enemyTurretMaterial);
+    enemyTurret.position.y = 0.6;
+    enemyTurret.castShadow = true;
+    enemy.add(enemyTurret);
+
+    // 敵の砲身を作成
+    const enemyBarrelGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.2, 8);
+    const enemyBarrelMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+    const enemyBarrel = new THREE.Mesh(enemyBarrelGeometry, enemyBarrelMaterial);
+    enemyBarrel.position.z = 0.6;
+    enemyBarrel.rotation.x = Math.PI / 2;
+    enemyBarrel.castShadow = true;
+    enemyTurret.add(enemyBarrel);
+
+    // 敵の情報を保存 - IDを追加
+    enemy.userData = {
+        id: id || Math.random().toString(36).substr(2, 9), // IDがない場合はランダムに生成
+        turret: enemyTurret,
+        barrel: enemyBarrel
+    };
+    gameState.enemies.push(enemy);
+    
+    // 敵の数表示を更新
+    updateEnemyCountDisplay();
+    
+    return enemy;
+}
+
+// 敵の作成
+function createEnemyByPos(x, z, id) {
+    // 敵の最大数をチェック
+    if (gameState.enemies.length >= gameState.maxEnemies) {
+        console.log(`敵の最大数 (${gameState.maxEnemies}) に達しました。これ以上敵は生成されません。`);
+        return;
+    }
+    
+    // 敵の車体を作成
+    const enemyGeometry = new THREE.BoxGeometry(1, 0.5, 1.5);
+    const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+    const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+    enemy.position.set(x, 0.25, z);
+    enemy.castShadow = true;
+    scene.add(enemy);
+
+    // 敵の砲塔を作成
+    const enemyTurretGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
+    const enemyTurretMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+    const enemyTurret = new THREE.Mesh(enemyTurretGeometry, enemyTurretMaterial);
+    enemyTurret.position.y = 0.6;
+    enemyTurret.castShadow = true;
+    enemy.add(enemyTurret);
+
+    // 敵の砲身を作成
+    const enemyBarrelGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.2, 8);
+    const enemyBarrelMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+    const enemyBarrel = new THREE.Mesh(enemyBarrelGeometry, enemyBarrelMaterial);
+    enemyBarrel.position.z = 0.6;
+    enemyBarrel.rotation.x = Math.PI / 2;
+    enemyBarrel.castShadow = true;
+    enemyTurret.add(enemyBarrel);
+
+    // 敵の情報を保存 - IDを追加
+    enemy.userData = {
+        id: id || Math.random().toString(36).substr(2, 9), // IDがない場合はランダムに生成
+        turret: enemyTurret,
+        barrel: enemyBarrel
+    };
+    gameState.enemies.push(enemy);
+    
+    // 敵の数表示を更新
+    updateEnemyCountDisplay();
+    
+    return enemy;
+}
+
+
+
+ // サーバーから敵を削除する関数 - IDを使用
+function removeEnemyFromServer(index) {
+    if (index < 0 || index >= gameState.enemies.length) {
+        console.error('無効な敵のインデックス:', index);
+        return;
+    }
+
+    const enemy = gameState.enemies[index];
+    const enemyId = enemy.userData.id;
+
+    fetch(`/api/enemies/${enemyId}`, { // IDでAPIを呼び出し
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log(`敵が削除されました: ID ${enemyId}`);
+            // サーバー側の処理で WebSocket 経由で通知が来るので、
+            // ここではローカルでの削除はしません。重複削除を避けるため。
+        } else {
+            console.error('敵の削除に失敗しました:', data.error);
+        }
+    })
+    .catch(error => console.error('敵の削除中にエラーが発生しました:', error));
+}
 
         // スコア表示の更新
         function updateScoreDisplay() {
