@@ -4,16 +4,20 @@
 プレイヤーキャラクターは上下左右に動くことができて、また、ミサイルを発射することができます。
 MCPを用いて、敵にミサイルを着弾させるデモになります。
 
+[![](https://img.youtube.com/vi/BVwZdBjdevg/0.jpg)](https://www.youtube.com/watch?v=BVwZdBjdevg)
 
-# install
+# how to install
 
-$ npm install express ws body-parser cors
+	//mcp server
+	$ cd src
+	$ npm install 
 
-$ node server.js
+	//game server
+	$ cd game-src 
+	$ npm install 
+	$ node server.js
 
-
-# api
-
+# api manual
 
 　1.gameにアクセス
 	http://localhost:3000
@@ -39,9 +43,10 @@ $ node server.js
 
 
 # debug
+
 	インスペクターを使って、MCPのデバッグを行います
 
-npx -y @modelcontextprotocol/inspector node ./build/index.js
+	npx -y @modelcontextprotocol/inspector node ./build/index.js
 
 
 
