@@ -17,6 +17,19 @@ MCPを用いて、敵にミサイルを着弾させるデモになります。
 	$ npm install 
 	$ node server.js
 
+# install mcp
+
+	{
+		"mcpServers": {
+			"mcp-game-controll-demo": {
+			"command": "/.nodebrew/current/bin/node",
+			"args": [
+				"index.js"
+			]
+			}
+		}
+	}
+
 # api manual
 
 　1.gameにアクセス
