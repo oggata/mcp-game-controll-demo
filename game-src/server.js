@@ -24,12 +24,12 @@ const clientPositions = new Map();
 // 敵の位置情報を保持する配列
 // 敵の位置情報を保持する配列 - IDを追加
 const enemyPositions = [
-  { id: 1, x: 10, z: 10 },
-  { id: 2, x: -5, z: 15 },
-  { id: 3, x: 8, z: -12 },
-  { id: 4, x: 1, z: -10 },
-  { id: 5, x: -10, z: 4 },
-  { id: 6, x: -3, z: -5 },
+  { id: 1, x:  20, z: 20 },
+  { id: 2, x: -15, z: 15 },
+  { id: 3, x: 10, z: -12 },
+  { id: 4, x: 14, z: -10 },
+  { id: 5, x: -10, z: 7 },
+  { id: 6, x: -30, z: -15 },
   { id: 7, x: 3, z: 6 }
 ];
 
@@ -232,6 +232,45 @@ app.get('/api/vision', (req, res) => {
     success: true, 
     playerPosition,
     visionInfo 
+  });
+});
+
+// 視界情報API（相対座標版）
+app.get('/api/vision-relative', (req, res) => {
+  // クライアントの位置情報を取得
+  const clientId = req.query.clientId;
+  let playerPosition = { x: 0, z: 0 };
+  
+  // クライアントIDが指定されている場合、そのクライアントの位置を取得
+  if (clientId) {
+    // WebSocketクライアントを探す
+    for (const client of clients) {
+      if (client.id === clientId) {
+        playerPosition = clientPositions.get(client) || { x: 0, z: 0 };
+        break;
+      }
+    }
+  }
+  
+  // 敵の相対位置情報を計算
+  const relativeEnemyPositions = enemyPositions.map(enemy => {
+    // プレイヤーから見た敵への相対ベクトルを計算
+    const relativeX = enemy.x - playerPosition.x;
+    const relativeZ = enemy.z - playerPosition.z;
+    
+    return {
+      id: enemy.id,
+      relativeX,
+      relativeZ,
+      distance: Math.sqrt(relativeX * relativeX + relativeZ * relativeZ),
+      direction: Math.atan2(relativeX, relativeZ) * (180 / Math.PI)
+    };
+  });
+  
+  res.json({
+    success: true,
+    playerPosition,
+    relativeEnemyPositions
   });
 });
 

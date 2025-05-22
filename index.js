@@ -135,6 +135,42 @@ server.tool(
     }
 );
 
+server.tool(
+    "vision-relative", 
+    "ゲームキャラクターの視界情報（相対座標）。プレイヤーからの相対的な敵の位置情報を取得する", 
+    {}, 
+    async () => {
+        try {
+            const response = await fetch(`http://localhost:3000/api/vision-relative`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            return {
+                content: [
+                    { 
+                        type: "text",
+                        text: JSON.stringify(data.relativeEnemyPositions)
+                    }
+                ]
+            };
+        } catch (error) {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Failed to get relative vision info: ${error instanceof Error ? error.message : String(error)}`
+                    }
+                ]
+            };
+        }
+    }
+);
+
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);

@@ -4,7 +4,12 @@
 プレイヤーキャラクターは上下左右に動くことができて、また、ミサイルを発射することができます。
 MCPを用いて、敵にミサイルを着弾させるデモになります。
 
-[![](https://img.youtube.com/vi/BVwZdBjdevg/0.jpg)](https://www.youtube.com/watch?v=BVwZdBjdevg)
+[![](https://img.youtube.com/vi/TJ5QTz-fWFI/0.jpg)](https://www.youtube.com/watch?v=TJ5QTz-fWFI)
+
+[![](https://img.youtube.com/vi/HyEOUvATil0/0.jpg)](https://www.youtube.com/watch?v=HyEOUvATil0)
+
+[![](https://img.youtube.com/vi/aSVuqsMoi28/0.jpg)](https://www.youtube.com/watch?v=aSVuqsMoi28)
+
 
 # how to install
 
